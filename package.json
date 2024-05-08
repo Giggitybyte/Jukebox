@@ -9,6 +9,7 @@
   "author": "Luke Triano (thegiggitybyte)",
   "license": "AGPL-3.0",
   "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.24",
     "@types/jsonfile": "^6.1.4",
     "@types/node": "^20.12.7",
     "@types/valid-url": "^1.0.7",
