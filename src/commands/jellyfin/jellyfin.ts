@@ -1,103 +1,129 @@
-import { episodeOverview } from "./episode";
 import { movieOverview } from "./movie";
-import { searchResults } from "./search";
-import { seasonOverview } from "./season";
 import { seriesOverview } from "./series";
-import { JellyfinSdk } from "../../jellyfin";
 import { Discord } from "../../discord";
-import { Message } from "discord.js-selfbot-v13";
-import { MediaUdp } from "@dank074/discord-video-stream";
-import { BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
+import { jellyfinSdk, JellyfinServer } from "../../jellyfin";
+import { Message, VoiceBasedChannel } from "discord.js-selfbot-v13";
+import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
+import { getSearchApi, getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import validUrl from 'valid-url';
 
-export const jellyfinSdk = new JellyfinSdk();
 
 export async function jellyfinCommand(discord: Discord, msg: Message, args: string[]) {
-    let selectedItemId: string | null = null;
-    let sourceServerId: string | null = null;
-    let itemOverviewMsg: Message | null = null;
-
     await msg.channel.sendTyping();
 
     if (validUrl.isWebUri(args[0])) {
-        await msg.react('🔗').catch(() => { });
-        let url: string = args[0];
-        let paramIndex = url.indexOf("#!/details") + 10;
-        let parameters = new URLSearchParams(url.substring(paramIndex))
-
-        let itemId = parameters.get("id");
-        let serverId = parameters.get("serverId");
-
-        if (serverId != null && itemId != null && jellyfinSdk.servers.has(serverId)) {
-            let server = jellyfinSdk.servers.get(serverId)!;
-            let item = await jellyfinSdk.getItem(serverId, itemId);
-
-            if (item == undefined || (item.Type != BaseItemKind.Movie && item.Type != BaseItemKind.Episode)) {
-                await msg.react('❌').catch(() => { });
-                return;
-            }
-
-            selectedItemId = item.Id!
-            sourceServerId = server.id
-
-            if (item.Type == BaseItemKind.Movie)
-                itemOverviewMsg = await movieOverview(msg, item);
-            else if (item.Type == BaseItemKind.Episode)
-                itemOverviewMsg = await episodeOverview(msg, item);
-        }
+        jellyfinUrl(discord, msg, args[0]);
     } else {
-        await msg.react('🔎').catch(() => { });
-        let selectedItem = await searchResults(msg, args.join(' '));
-        if (!selectedItem) return;
-
-        if (selectedItem.Type! == BaseItemKind.Movie) {
-            sourceServerId = selectedItem.ServerId!;
-            selectedItemId = selectedItem.Id!;
-            itemOverviewMsg = await movieOverview(msg, selectedItem);
-        } else if (selectedItem.Type! == BaseItemKind.Series) {
-            let selectedSeason = await seriesOverview(msg, selectedItem);
-            if (!selectedSeason) return;
-
-            let selectedEpisode = await seasonOverview(msg, selectedSeason);
-            if (!selectedEpisode) return;
-
-            sourceServerId = selectedEpisode.ServerId!;
-            selectedItemId = selectedEpisode.Id!;
-            itemOverviewMsg = await episodeOverview(msg, selectedEpisode);
-        } else {
-            console.warn(`Got unexpected ${selectedItem.Type!} from user selection.`);
-        }
+        jellyfinSearch(discord, msg, args.join(' '));
     }
+}
 
-    if (selectedItemId == null || sourceServerId == null || itemOverviewMsg == null) {
-        await msg.react('⚠️').catch(() => { });
+async function jellyfinUrl(discord: Discord, msg: Message, url: string): Promise<BaseItemDto | undefined> {
+    await msg.react('🔗').catch(() => { });
+
+    let paramIndex = url.indexOf("#!/details") + 10;
+    let parameters = new URLSearchParams(url.substring(paramIndex))
+    let itemId = parameters.get("id");
+    let serverId = parameters.get("serverId");
+
+    if (serverId == null || itemId == null || jellyfinSdk.servers.has(serverId) == false) {
+        await msg.react('❌').catch(() => { });
         return;
     }
 
-    discord.gatewayClient.on('messageReactionAdd', async (reaction, user) => {
-        if (reaction.message.id !== itemOverviewMsg.id || user.voice?.channel == null) return;
+    let video = await jellyfinSdk.getItem(serverId, itemId);
+    if (video == undefined || (video.Type != BaseItemKind.Movie && video.Type != BaseItemKind.Episode)) {
+        await msg.react('❌').catch(() => { });
+        return;
+    } else {
+        await msg.react('✅').catch(() => { });
+    }
 
-        let video = await jellyfinSdk.getItem(sourceServerId, selectedItemId);
-        if (video == undefined || (video.Type != BaseItemKind.Movie && video.Type != BaseItemKind.Episode)) return;
+    let videoUrl = await jellyfinSdk.getVideoStreamUrl(video.ServerId!, video.Id!);
+    let videoTitle = (video.Name!.length > 100) ? `${video.Name!.substring(0, 100)}...` : video.Name;
+    discord.setStatus('📺', `Streaming: ${videoTitle}`);
 
-        if (discord.streamClient.voiceConnection == null) {
-            await discord.streamClient.joinVoice(msg.guild!.id, user.voice.channel.id);
-        }
-
-        let udpConnection: MediaUdp;
-        if (discord.streamClient.voiceConnection!.streamConnection != null)
-            udpConnection = discord.streamClient.voiceConnection!.streamConnection!.udp;
-        else
-            udpConnection = await discord.streamClient.createStream();
-
-        let videoUrl = await jellyfinSdk.getVideoStreamUrl(sourceServerId, selectedItemId);
-        let videoTitle = (video.Name!.length > 100) ? `${video.Name!.substring(0, 100)}...` : video.Name;
-        discord.setStatus('🎦', `Streaming ${video.Type!}: ${videoTitle}`);
-
-        discord.playVideo(videoUrl, udpConnection).catch(e => {
-            console.error(`Something went wrong while streaming ${video.Id} from ${sourceServerId} in ${msg.guild!.id}\n${e}`);
-        });;
-    });
+    discord.playVideo(videoUrl, msg.guild!.id, msg.author.voice!.channelId!);
 }
 
+async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
+    await msg.react('🔎').catch(() => { });
 
+    let results: { server: JellyfinServer, result: BaseItemDto, seasons: number | null }[] = [];
+    for (const [id, server] of jellyfinSdk.servers) {
+        let result = await getSearchApi(server.api).get({
+            searchTerm: query,
+            limit: 10,
+            includeItemTypes: [BaseItemKind.Series, BaseItemKind.Movie]
+        });
+
+        for (let searchResult of result.data.SearchHints!) {
+            let item = await jellyfinSdk.getItem(id, searchResult.Id!);
+            if (searchResult.Type == BaseItemKind.Series) {
+                let seasonsResponse = await getTvShowsApi(server.api).getSeasons({ seriesId: searchResult.Id! });
+                let seasonCount = seasonsResponse.data.TotalRecordCount!;
+                if (seasonCount == 0) continue;
+
+                results.push({ server: server, result: item!, seasons: seasonCount });
+            } else {
+                results.push({ server: server, result: item!, seasons: null });
+            }
+        }
+    }
+
+    results.sort((a, b) => a.result.Name!.localeCompare(b.result.Name!));
+
+
+    let resultList = `Results for **\`${query}\`** *(${jellyfinSdk.servers.size} ${jellyfinSdk.servers.size == 1 ? "server" : "servers"}*)\n`;
+    resultList += "```asciidoc\n";
+
+    for (let i = 0; i < results.length; i++) {
+        let { server, result, seasons } = results[i];
+        let resultTitle = result.Name!.includes(`(${result.ProductionYear})`)
+            ? result.Name!.replace(`(${result.ProductionYear})`, '')
+            : result.Name!;
+
+        resultTitle = resultTitle.trim();
+        if (resultTitle.length > 60) resultTitle = `${resultTitle.substring(0, 60)}...`
+
+        if (result.Type! == BaseItemKind.Series) {
+            resultList += `[${i + 1}]:: ${resultTitle} {${result.ProductionYear}}\n`;
+            resultList += ` ╰─── Series ─ ${seasons} ${seasons == 1 ? "season" : "seasons"} ─ ${server.name}\n\n`;
+        } else if (result.Type! == BaseItemKind.Movie) {
+            resultList += `[${i + 1}]:: ${resultTitle} {${result.ProductionYear}}\n`
+            resultList += ` ╰─── Movie ─ ${result.Width!}×${result.Height} ─ ${server.name}\n\n`
+        } else {
+            console.warn(`Got unexpected ${result.Type!} from Jellyfin search results.`)
+        }
+    }
+
+    resultList += "\n```\n*Reply to this message with a number to view a result*";
+
+    let resultListMsg = await msg.reply(resultList);
+    discord.gatewayClient.on('messageCreate', async (m) => {
+        let validReply: boolean = m.reference?.messageId === resultListMsg.id
+            && Number.isNaN(parseInt(m.content)) == false
+            && m.author.voice?.channel != null;
+
+        if (validReply == false) return;
+
+        let selectedNumber = Number(m.content);
+        let { server, result } = results[selectedNumber - 1];
+        let selectedItem = await jellyfinSdk.getItem(server.id, result.Id!);
+
+        if (selectedItem == undefined) {
+            console.warn(`Jellyfin result message ${resultListMsg.id} contained deleted/unavailable ${result.Type?.toLowerCase()} ${result.Name} (${result.Id})`);
+            await m.react('⚠️').catch(() => { });
+            return;
+        }
+
+        if (selectedItem.Type! == BaseItemKind.Movie) {
+            movieOverview(discord, m, selectedItem);
+        } else if (selectedItem.Type! == BaseItemKind.Series) {
+            seriesOverview(discord, m, selectedItem);
+        } else {
+            await m.react('⚠️').catch(() => { });
+            console.warn(`Got unexpected ${selectedItem.Type!} from user selection of Jellyfin result from ${resultListMsg.id}.`);
+        }
+    });
+}

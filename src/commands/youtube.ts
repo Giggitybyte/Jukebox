@@ -5,16 +5,12 @@ import ytdl from 'ytdl-core';
 
 export async function youtubeCommand(discord: Discord, msg: Message, args: string[]) {
     if (args.length != 1) return;
+    await msg.react('🔗').catch(() => { })
 
     if (ytdl.validateURL(args[0]) == false) {
-        await msg.react('🔗')
-        .then(_ => msg.react('❌'))
-        .catch(() => {});
-
+        await msg.react('❌').catch(() => { });
         return;
     }
-
-    await msg.channel.sendTyping();
 
     await new Promise<void>((resolve, reject) => {
         command?.kill('SIGINT');
@@ -32,31 +28,20 @@ export async function youtubeCommand(discord: Discord, msg: Message, args: strin
         url = formats[0].url;
     else {
         console.warn(`Could not get direct URL for YouTube video ${videoInfo.videoDetails.videoId}`)
-        await msg.react('⚠️').catch(() => {});
+        await msg.react('⚠️').catch(() => { });
         return;
     }
 
-    if (discord.streamClient.voiceConnection == null) {
-        await discord.streamClient.joinVoice(msg.guild!.id, msg.author.voice!.channelId!);
-    }
-
-    let udpConnection : MediaUdp;
-    if (discord.streamClient.voiceConnection!.streamConnection != null)
-        udpConnection = discord.streamClient.voiceConnection!.streamConnection!.udp;
-    else 
-        udpConnection = await discord.streamClient.createStream();
-    
-    let videoTitle = (videoInfo.videoDetails.title.length > 100) 
+    let videoTitle = (videoInfo.videoDetails.title.length > 100)
         ? `${videoInfo.videoDetails.title.substring(0, 100)}...`
         : videoInfo.videoDetails.title;
-    discord.setStatus('🎦', `Streaming YouTube: ${videoTitle}`);
+    discord.setStatus('📺', `Streaming YouTube: ${videoTitle}`);
 
-    await msg.react('👌');
+    await msg.react('✅');
 
-    discord.playVideo(url, udpConnection)
-        .then(_ => msg.react('✅').catch(() => {}))
+    discord.playVideo(url, msg.guild!.id, msg.author.voice!.channelId!)
         .catch(e => {
             console.warn(`Something went wrong while streaming ${videoInfo.videoDetails.videoId} from YouTube in ${msg.guild!.id}\n${e}`);
-            msg.react('⚠️').catch(() => {});
+            msg.react('⚠️').catch(() => { });
         });
 }

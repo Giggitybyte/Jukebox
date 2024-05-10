@@ -1,14 +1,19 @@
-import { Client, CustomStatus, RichPresence } from "discord.js-selfbot-v13";
-import { AudioStream, H264NalSplitter, MediaUdp, Streamer, VideoStream } from "@dank074/discord-video-stream";
-import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
-import { Readable, Transform } from "stream";
-import ffmpeg, { FfmpegCommand } from "fluent-ffmpeg";
-import prism from "prism-media";
+// commands
+import { jellyfinCommand } from "./commands/jellyfin/jellyfin.js";
 import { youtubeCommand } from "./commands/youtube.js";
 import { disconnectCommand } from "./commands/disconnect.js";
-import { jellyfinCommand } from "./commands/jellyfin/jellyfin.js";
 
-export class Discord { // TODO: add idle video streamed from a local file    
+// libraries
+import { Client, CustomStatus, Guild, VoiceBasedChannel } from "discord.js-selfbot-v13";
+import { AudioStream, H264NalSplitter, MediaUdp, Streamer, VideoStream } from "@dank074/discord-video-stream";
+import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
+import ffmpeg, { FfmpegCommand, AudioVideoFilter } from "fluent-ffmpeg";
+import prism from "prism-media";
+import { Readable } from "stream";
+import validUrl from 'valid-url';
+
+/** Wrapper class for interacting with Discord and livestreaming video to a voice channel. */
+export class Discord {
     private _discordClient: Client;
     private _streamClient: Streamer;
     private _ffmpegCommand: FfmpegCommand | null
@@ -19,6 +24,10 @@ export class Discord { // TODO: add idle video streamed from a local file
 
     public get gatewayClient() {
         return this._discordClient;
+    }
+
+    public get ffmpeg() {
+        return this._ffmpegCommand;
     }
 
     constructor() {
@@ -62,42 +71,51 @@ export class Discord { // TODO: add idle video streamed from a local file
         });
     }
 
-    public setIdleStatus() { // TODO: random idle status
+    public setIdleStatus() {
         let status = new CustomStatus(this._discordClient)
-            .setEmoji('⌛')
-            .setState('Passing time...');
+            .setEmoji('💿')
+            .setState('Spinning around...'); // TODO: random idle status
 
         this._discordClient.user!.setPresence({
             status: "idle",
             activities: [status]
         });
+
+        // TODO: add idle video streamed from a local file
     }
 
-    public async createLiveStream(guildId: string, channelId: string): Promise<MediaUdp> {
+    public async createStreamConnection(guildId: string, channelId: string): Promise<MediaUdp> {
+        if (this.streamClient.voiceConnection?.channelId !== channelId) {
+            this.streamClient.leaveVoice();
+        }
+
         await this.streamClient.joinVoice(guildId, channelId);
 
         // TODO: detect guild nitro level and try to stream at higher qualities.
         let udpConnection = await this.streamClient.createStream({
             width: 1280,
             height: 720,
-            bitrateKbps: 10000,
-            maxBitrateKbps: 10000,
+            bitrateKbps: 6000,
+            maxBitrateKbps: 6000,
             videoCodec: "H264",
-            readAtNativeFps: true
+            readAtNativeFps: true,
+            h26xPreset: 'ultrafast'
         });
 
         return udpConnection;
     }
 
-    public async playVideo(video: string | Readable, udpConnection: MediaUdp) {
+    public async playVideo(video: string | Readable, guildId: string, channelId: string) {
+        let udpConnection = await this.createStreamConnection(guildId, channelId);
         udpConnection.mediaConnection.setSpeaking(true);
         udpConnection.mediaConnection.setVideoStatus(true);
 
-        console.log(`Started streaming`);
+        console.log(`Started streaming in guild ${guildId}; voice channel ${channelId}`);
         await this.streamVideo(video, udpConnection)
             .then(msg => {
-                console.log(`Finished streaming (${msg})`);
+                console.log(`Finished streaming in guild ${guildId} (${msg})`);
             })
+            .catch(e => console.error(`Something went wrong while streaming in guild ${guildId}: ${e.message}`))
             .finally(async () => {
                 udpConnection.mediaConnection.setSpeaking(false);
                 udpConnection.mediaConnection.setVideoStatus(false);
@@ -115,18 +133,14 @@ export class Discord { // TODO: add idle video streamed from a local file
             });
     }
 
-    private streamVideo(input: string | Readable, mediaUdp: MediaUdp) {
-        return new Promise<string>((resolve, reject) => {
-            const streamOpts = mediaUdp.mediaConnection.streamOptions;
-            const videoStream: VideoStream = new VideoStream(mediaUdp, streamOpts.fps, streamOpts.readAtNativeFps);
-            let videoOutput: Transform = new H264NalSplitter();
-            let isHttpUrl = false;
-            let isHls = false;
+    public async playAudio(audio: string | Readable, guildId: string, channelId: string) {
+        // TODO: stream audio through voice connection, stream audio visualizer video through webcam
+    }
 
-            if (typeof input === "string") {
-                isHttpUrl = input.startsWith('http') || input.startsWith('https');
-                isHls = input.includes('m3u') || input.includes('m3u8');
-            }
+    private streamVideo(input: string | Readable, udpConnection: MediaUdp) {
+        return new Promise<string>((resolve, reject) => {
+            let streamOpts = udpConnection.mediaConnection.streamOptions;
+            let videoStream = new VideoStream(udpConnection, streamOpts.fps, streamOpts.readAtNativeFps);
 
             try {
                 this._ffmpegCommand = ffmpeg(input)
@@ -135,17 +149,18 @@ export class Discord { // TODO: add idle video streamed from a local file
                     .addOption('-analyzeduration', '0')
                     .on('end', () => {
                         this._ffmpegCommand = null;
-                        resolve("video ended")
+                        resolve("Stream completed.")
                     })
                     .on("error", (err, stdout, stderr) => {
                         this._ffmpegCommand = null;
-                        reject('cannot play video ' + err.message)
+                        reject('Unable to stream: ' + err)
                     })
                     .on('stderr', console.error);
 
+                let videoOutput = new H264NalSplitter();
                 this._ffmpegCommand.output(StreamOutput(videoOutput).url, { end: false })
                     .noAudio()
-                    .size(`${streamOpts.width}x?`)
+                    .videoFilter("scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2")
                     .fpsOutput(streamOpts.fps ?? 30)
                     .videoBitrate(`${streamOpts.bitrateKbps}k`)
                     .format('h264')
@@ -154,7 +169,7 @@ export class Discord { // TODO: add idle video streamed from a local file
                         '-pix_fmt yuv420p',
                         `-preset ${streamOpts.h26xPreset}`,
                         '-profile:v baseline',
-                        `-g ${streamOpts.fps}`,
+                        `-g ${streamOpts.fps ?? 30}`,
                         `-bf 0`,
                         `-x264-params keyint=${streamOpts.fps}:min-keyint=${streamOpts.fps}`,
                         '-bsf:v h264_metadata=aud=insert'
@@ -162,7 +177,7 @@ export class Discord { // TODO: add idle video streamed from a local file
 
                 videoOutput.pipe(videoStream, { end: false });
 
-                let audioStream: AudioStream = new AudioStream(mediaUdp);
+                let audioStream: AudioStream = new AudioStream(udpConnection);
                 let opus = new prism.opus.Encoder({ channels: 2, rate: 48000, frameSize: 960 });
 
                 this._ffmpegCommand.output(StreamOutput(opus).url, { end: false })
@@ -174,10 +189,10 @@ export class Discord { // TODO: add idle video streamed from a local file
                 opus.pipe(audioStream, { end: false });
 
                 if (streamOpts.hardwareAcceleratedDecoding) this._ffmpegCommand.inputOption('-hwaccel', 'auto');
-                if (streamOpts.readAtNativeFps) this._ffmpegCommand.inputOption('-re')
+                if (streamOpts.readAtNativeFps) this._ffmpegCommand.inputOption('-re');
 
-                if (isHttpUrl) {
-                    let headers = {
+                if (typeof input === "string" && validUrl.isWebUri(input as string)) {
+                    let headers = { // TODO: auth headers for jellyfin HLS
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.3",
                         "Connection": "keep-alive"
                     }
@@ -186,20 +201,21 @@ export class Discord { // TODO: add idle video streamed from a local file
                         .map(key => key + ": " + headers[key])
                         .join("\r\n"));
 
-                    if (!isHls) this._ffmpegCommand.inputOptions([
-                        '-reconnect 1',
-                        '-reconnect_at_eof 1',
-                        '-reconnect_streamed 1',
-                        '-reconnect_delay_max 4294'
-                    ]);
+                    if (input.includes('m3u') || input.includes('m3u8')) {
+                        this._ffmpegCommand.inputOptions([
+                            '-reconnect 1',
+                            '-reconnect_at_eof 1',
+                            '-reconnect_streamed 1',
+                            '-reconnect_delay_max 4294',
+                            '-bsf:a aac_adtstoasc'
+                        ]);
+                    }
                 }
 
                 this._ffmpegCommand.run();
             } catch (e) {
-                //audioStream.end();
-                //videoStream.end();
                 this._ffmpegCommand = null;
-                reject("cannot play video " + e.message);
+                reject("FFmpeg exited prematurely: " + e.message);
             }
         })
     }

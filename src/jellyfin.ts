@@ -53,7 +53,6 @@ export class JellyfinSdk {
         let result = await itemsApi.getItems({ 
             ids: [itemId], 
             fields: [ItemFields.Overview, ItemFields.ChildCount, ItemFields.RecursiveItemCount, ItemFields.Width, ItemFields.Height, ItemFields.OriginalTitle],
-            recursive: true
         });
 
         if (result.data.TotalRecordCount == 0) {
@@ -123,7 +122,9 @@ export class JellyfinSdk {
             itemId: videoId,
             container: "mp4",
             videoCodec: 'h264',
-            transcodeReasons: "Discord/WebRTC restrictions."
+            audioSampleRate: 48000,
+            maxFramerate: 30,
+            copyTimestamps: true
         };
     }
 }
@@ -140,3 +141,5 @@ interface JsonServer {
     address: string;
     token: string;
 }
+
+export const jellyfinSdk = new JellyfinSdk();

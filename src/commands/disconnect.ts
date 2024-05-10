@@ -4,12 +4,12 @@ import { command } from "@dank074/discord-video-stream";
 
 export async function disconnectCommand(discord: Discord, msg: Message, args: string[]) {
     let stream = discord.streamClient.voiceConnection?.streamConnection;
-    if(stream == null || msg.guild!.members.me!.voice?.channel == null) return;
+    if (stream == null || msg.guild!.members.me!.voice?.channel == null) return;
 
-    command?.kill("SIGINT");    
+    discord.ffmpeg?.kill("SIGINT");
     stream.setSpeaking(false);
     stream.setVideoStatus(false);
-    discord.streamClient.stopStream();    
+    discord.streamClient.stopStream();
     discord.streamClient.leaveVoice();
 
     await msg.react('👋')
