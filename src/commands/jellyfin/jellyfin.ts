@@ -2,16 +2,15 @@ import { movieOverview } from "./movie";
 import { seriesOverview } from "./series";
 import { Discord } from "../../discord";
 import { jellyfinSdk, JellyfinServer } from "../../jellyfin";
-import { Message, VoiceBasedChannel } from "discord.js-selfbot-v13";
+import { Message } from "discord.js-selfbot-v13";
 import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { getSearchApi, getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import validUrl from 'valid-url';
 
 
 export async function jellyfinCommand(discord: Discord, msg: Message, args: string[]) {
-    await msg.channel.sendTyping();
-
     if (validUrl.isWebUri(args[0])) {
+        await msg.react('🔗').catch(() => { });
         jellyfinUrl(discord, msg, args[0]);
     } else {
         jellyfinSearch(discord, msg, args.join(' '));
@@ -19,8 +18,6 @@ export async function jellyfinCommand(discord: Discord, msg: Message, args: stri
 }
 
 async function jellyfinUrl(discord: Discord, msg: Message, url: string): Promise<BaseItemDto | undefined> {
-    await msg.react('🔗').catch(() => { });
-
     let paramIndex = url.indexOf("#!/details") + 10;
     let parameters = new URLSearchParams(url.substring(paramIndex))
     let itemId = parameters.get("id");
@@ -48,6 +45,8 @@ async function jellyfinUrl(discord: Discord, msg: Message, url: string): Promise
 
 async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
     await msg.react('🔎').catch(() => { });
+    let searchThread = await msg.startThread({ name: `Jellyfin Search: '${query}'` });
+    await searchThread.sendTyping();
 
     let results: { server: JellyfinServer, result: BaseItemDto, seasons: number | null }[] = [];
     for (const [id, server] of jellyfinSdk.servers) {
@@ -98,11 +97,11 @@ async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
     }
 
     resultList += "\n```\n*Reply to this message with a number to view a result*";
+    let resultListMsg = await searchThread.send(resultList);
 
-    let resultListMsg = await msg.reply(resultList);
     discord.gatewayClient.on('messageCreate', async (m) => {
         let validReply: boolean = m.reference?.messageId === resultListMsg.id
-            && Number.isNaN(parseInt(m.content)) == false
+            && Number.isNaN(parseInt(m.content)) === false
             && m.author.voice?.channel != null;
 
         if (validReply == false) return;

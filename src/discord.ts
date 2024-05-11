@@ -106,6 +106,14 @@ export class Discord {
     }
 
     public async playVideo(video: string | Readable, guildId: string, channelId: string) {
+        if (this._streamClient.voiceConnection?.streamConnection != undefined) {
+            this.closeStream();
+
+            await new Promise<void>((resolve, reject) => {
+                setTimeout(() => resolve(), 1500);
+            });
+        }
+
         let udpConnection = await this.createStreamConnection(guildId, channelId);
         udpConnection.mediaConnection.setSpeaking(true);
         udpConnection.mediaConnection.setVideoStatus(true);
@@ -117,24 +125,31 @@ export class Discord {
             })
             .catch(e => console.error(`Something went wrong while streaming in guild ${guildId}: ${e.message}`))
             .finally(async () => {
-                udpConnection.mediaConnection.setSpeaking(false);
-                udpConnection.mediaConnection.setVideoStatus(false);
-
-                this._ffmpegCommand?.kill("SIGINT");
-
                 await new Promise<void>((resolve, reject) => {
                     setTimeout(() => resolve(), 1500);
                 });
 
-                this.streamClient.stopStream();
-                this.streamClient.leaveVoice();
-
+                await this.closeStream();
                 this.setIdleStatus();
             });
     }
 
     public async playAudio(audio: string | Readable, guildId: string, channelId: string) {
         // TODO: stream audio through voice connection, stream audio visualizer video through webcam
+    }
+
+    public async closeStream(): Promise<boolean> {
+        let stream = this._streamClient.voiceConnection?.streamConnection;
+        if (stream == undefined) return false;
+
+        this._ffmpegCommand?.kill("SIGINT");
+        stream.setSpeaking(false);
+        stream.setVideoStatus(false);
+        this._streamClient.stopStream();
+        this._streamClient.leaveVoice();
+
+        console.log("Disconnected from voice channel.")
+        return true
     }
 
     private streamVideo(input: string | Readable, udpConnection: MediaUdp) {
@@ -160,7 +175,7 @@ export class Discord {
                 let videoOutput = new H264NalSplitter();
                 this._ffmpegCommand.output(StreamOutput(videoOutput).url, { end: false })
                     .noAudio()
-                    .videoFilter("scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2")
+                    .videoFilter("scale=w=1280:h=720:force_original_aspect_ratio=increase:force_divisible_by=2")
                     .fpsOutput(streamOpts.fps ?? 30)
                     .videoBitrate(`${streamOpts.bitrateKbps}k`)
                     .format('h264')

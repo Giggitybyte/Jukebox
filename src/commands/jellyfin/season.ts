@@ -37,10 +37,10 @@ export async function seasonOverview(discord: Discord, msg: Message, season: Bas
     }
     overview += "```\n*Reply to this message with a number to view season episodes*"
 
-    let overviewMsg = await msg.reply(overview);
+    let overviewMsg = await msg.channel.send(overview);
     discord.gatewayClient.on('messageCreate', async (m) => {
         let validReply: boolean = m.reference?.messageId === overviewMsg.id
-            && Number.isNaN(parseInt(m.content)) == false
+            && Number.isNaN(parseInt(m.content)) === false
             && m.author.voice?.channel != null;
 
         if (validReply == false) return;
