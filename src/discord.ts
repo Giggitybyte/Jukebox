@@ -98,7 +98,7 @@ export class Discord {
             bitrateKbps: 6000,
             maxBitrateKbps: 6000,
             videoCodec: "H264",
-            readAtNativeFps: true,
+            readAtNativeFps: false,
             h26xPreset: 'ultrafast'
         });
 
@@ -175,7 +175,7 @@ export class Discord {
                 let videoOutput = new H264NalSplitter();
                 this._ffmpegCommand.output(StreamOutput(videoOutput).url, { end: false })
                     .noAudio()
-                    .videoFilter("scale=w=1280:h=720:force_original_aspect_ratio=increase:force_divisible_by=2")
+                    .videoFilter(`scale=w=${streamOpts.width}:h=${streamOpts.height}:force_original_aspect_ratio=increase:force_divisible_by=2`)
                     .fpsOutput(streamOpts.fps ?? 30)
                     .videoBitrate(`${streamOpts.bitrateKbps}k`)
                     .format('h264')

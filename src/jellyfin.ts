@@ -2,7 +2,7 @@ import os from 'os'
 import jsonfile from 'jsonfile';
 import urlcat from 'urlcat';
 import { Api, ClientInfo, DeviceInfo, Jellyfin } from "@jellyfin/sdk";
-import { getItemsApi, getSystemApi, getUserApi, getVideosApi } from "@jellyfin/sdk/lib/utils/api";
+import { getItemsApi, getSystemApi } from "@jellyfin/sdk/lib/utils/api";
 import { BaseItemDto, ItemFields } from '@jellyfin/sdk/lib/generated-client/models';
 
 export class JellyfinSdk {
@@ -120,9 +120,8 @@ export class JellyfinSdk {
     private videoParameters(videoId: string) {
         return {
             itemId: videoId,
-            container: "mp4",
+            container: "ts",
             videoCodec: 'h264',
-            audioSampleRate: 48000,
             maxFramerate: 30,
             copyTimestamps: true
         };
