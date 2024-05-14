@@ -18,7 +18,7 @@ export async function episodeOverview(discord: Discord, msg: Message, episode: B
     }
 
     overview += "```asciidoc\n"
-        + "Release Date :: " + (episode.PremiereDate ?? episode.ProductionYear) + '\n'
+        + "Release Date :: " + (episode.PremiereDate != null ? new Date(episode.PremiereDate).toLocaleDateString("en-US") : episode.ProductionYear) + '\n'
         + `Duration :: ${(duration.hours > 0 ? `${duration.hours} hours ` : '') + `${duration.minutes} minutes`}\n`
         + `Resolution :: ${episode.Width}x${episode.Height}\n`
         + "Source :: " + server.name + "\n"
@@ -37,11 +37,11 @@ export async function episodeOverview(discord: Discord, msg: Message, episode: B
             return;
         };
 
-        let videoTitle = (video.Name!.length > 100) ? `${video.Name!.substring(0, 100)}...` : video.Name;
-        discord.setStatus('📺', `Streaming: ${videoTitle}`); // TODO: episode info
+        let seriesTitle = (video.SeriesName!.length > 60) ? `${video.SeriesName!.substring(0, 60)}...` : video.SeriesName;
+        discord.setStatus('📺', `Streaming ${seriesTitle} S${video.ParentIndexNumber}E${video.IndexNumber}`);
 
         let videoUrl = await jellyfinSdk.getVideoStreamUrl(video.ServerId!, video.Id!);
-        discord.playVideo(videoUrl, msg.guild!.id, user.voice!.channelId!);
+        discord.streamVideo(videoUrl, msg.guild!.id, user.voice!.channelId!);
 
         await (msg.channel as ThreadChannel).setArchived(true);
     });

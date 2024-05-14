@@ -1,39 +1,47 @@
 // commands
+import { helpCommand } from "./commands/help.js";
 import { jellyfinCommand } from "./commands/jellyfin/jellyfin.js";
 import { youtubeCommand } from "./commands/youtube.js";
+import { volumeCommand } from "./commands/volume.js";
 import { disconnectCommand } from "./commands/disconnect.js";
 
 // libraries
-import { Client, CustomStatus, Guild, VoiceBasedChannel } from "discord.js-selfbot-v13";
+import { Client, CustomStatus } from "discord.js-selfbot-v13";
 import { AudioStream, H264NalSplitter, MediaUdp, Streamer, VideoStream } from "@dank074/discord-video-stream";
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
-import ffmpeg, { FfmpegCommand, AudioVideoFilter } from "fluent-ffmpeg";
+import ffmpeg, { FfmpegCommand } from "fluent-ffmpeg";
 import prism from "prism-media";
 import { Readable } from "stream";
 import validUrl from 'valid-url';
+import { setTimeout } from "timers/promises";
 
 /** Wrapper class for interacting with Discord and livestreaming video to a voice channel. */
 export class Discord {
     private _discordClient: Client;
     private _streamClient: Streamer;
     private _ffmpegCommand: FfmpegCommand | null
-
-    public get streamClient() {
-        return this._streamClient;
-    }
+    private _volumeTranformer: prism.VolumeTransformer | null;
 
     public get gatewayClient() {
         return this._discordClient;
     }
 
-    public get ffmpeg() {
-        return this._ffmpegCommand;
+    public get streamClient() {
+        return this._streamClient;
+    }
+
+    public get streamVolume() {
+        return (this._volumeTranformer?.volume ?? 1) * 100;
+    }
+
+    public set streamVolume(percentage: number) {
+        if (this._volumeTranformer == null) return;
+        this._volumeTranformer.setVolume(percentage > -1 ? percentage / 100 : 1);
     }
 
     constructor() {
         this._discordClient = new Client();
         this._streamClient = new Streamer(this._discordClient);
-
         this._discordClient.on('ready', () => {
             console.log(`Logged in as @${this._discordClient.user!.username}`);
             this.setIdleStatus();
@@ -47,8 +55,10 @@ export class Discord {
             let args = message.slice(1);
 
             if (cmd === "help") {
-                // ...
-            } else if (cmd === "disconnect") {
+                helpCommand(this, msg, args);
+            } else if (cmd === "volume") {
+                volumeCommand(this, msg, args);
+            } else if (cmd === "disconnect" || cmd === "stop") {
                 disconnectCommand(this, msg, args);
             } else if (args.length == 0 || msg.author.voice?.channelId == null) {
                 return;
@@ -84,58 +94,27 @@ export class Discord {
         // TODO: add idle video streamed from a local file
     }
 
-    public async createStreamConnection(guildId: string, channelId: string): Promise<MediaUdp> {
-        if (this.streamClient.voiceConnection?.channelId !== channelId) {
-            this.streamClient.leaveVoice();
-        }
-
-        await this.streamClient.joinVoice(guildId, channelId);
-
-        // TODO: detect guild nitro level and try to stream at higher qualities.
-        let udpConnection = await this.streamClient.createStream({
-            width: 1280,
-            height: 720,
-            bitrateKbps: 6000,
-            maxBitrateKbps: 6000,
-            videoCodec: "H264",
-            readAtNativeFps: false,
-            h26xPreset: 'ultrafast'
-        });
-
-        return udpConnection;
-    }
-
-    public async playVideo(video: string | Readable, guildId: string, channelId: string) {
+    public async streamVideo(video: string | Readable, guildId: string, channelId: string) {
         if (this._streamClient.voiceConnection?.streamConnection != undefined) {
             this.closeStream();
-
-            await new Promise<void>((resolve, reject) => {
-                setTimeout(() => resolve(), 1500);
-            });
+            await setTimeout(1500);
         }
 
-        let udpConnection = await this.createStreamConnection(guildId, channelId);
+        let udpConnection = await this.createLiveStreamConnection(guildId, channelId);
         udpConnection.mediaConnection.setSpeaking(true);
         udpConnection.mediaConnection.setVideoStatus(true);
 
         console.log(`Started streaming in guild ${guildId}; voice channel ${channelId}`);
-        await this.streamVideo(video, udpConnection)
+        await this.streamToDiscord(video, udpConnection)
             .then(msg => {
                 console.log(`Finished streaming in guild ${guildId} (${msg})`);
             })
             .catch(e => console.error(`Something went wrong while streaming in guild ${guildId}: ${e.message}`))
             .finally(async () => {
-                await new Promise<void>((resolve, reject) => {
-                    setTimeout(() => resolve(), 1500);
-                });
-
+                await setTimeout(1500);
                 await this.closeStream();
                 this.setIdleStatus();
             });
-    }
-
-    public async playAudio(audio: string | Readable, guildId: string, channelId: string) {
-        // TODO: stream audio through voice connection, stream audio visualizer video through webcam
     }
 
     public async closeStream(): Promise<boolean> {
@@ -152,12 +131,36 @@ export class Discord {
         return true
     }
 
-    private streamVideo(input: string | Readable, udpConnection: MediaUdp) {
-        return new Promise<string>((resolve, reject) => {
-            let streamOpts = udpConnection.mediaConnection.streamOptions;
-            let videoStream = new VideoStream(udpConnection, streamOpts.fps, streamOpts.readAtNativeFps);
+    private async createLiveStreamConnection(guildId: string, channelId: string): Promise<MediaUdp> {
+        if (this.streamClient.voiceConnection?.channelId !== channelId) {
+            this.streamClient.leaveVoice();
+        }
 
+        await this.streamClient.joinVoice(guildId, channelId);
+
+        // TODO: detect guild nitro level and try to stream at higher qualities.
+        let udpConnection = await this.streamClient.createStream({
+            width: 1280,
+            height: 720,
+            bitrateKbps: 4000,
+            maxBitrateKbps: 4000,
+            videoCodec: "H264",
+            readAtNativeFps: false,
+            h26xPreset: 'medium'
+        });
+
+        return udpConnection;
+    }
+
+    private async createWebcamConnection(guildId: string, channelId: string) {
+
+    }
+
+    private streamToDiscord(input: string | Readable, udpConnection: MediaUdp) {
+        return new Promise<string>((resolve, reject) => {
             try {
+                let streamOpts = udpConnection.mediaConnection.streamOptions;
+
                 this._ffmpegCommand = ffmpeg(input)
                     .addOption('-loglevel', '0')
                     .addOption('-fflags', 'nobuffer')
@@ -172,10 +175,13 @@ export class Discord {
                     })
                     .on('stderr', console.error);
 
+
+                // Video
+                let videoStream = new VideoStream(udpConnection, streamOpts.fps, streamOpts.readAtNativeFps);
                 let videoOutput = new H264NalSplitter();
                 this._ffmpegCommand.output(StreamOutput(videoOutput).url, { end: false })
                     .noAudio()
-                    .videoFilter(`scale=w=${streamOpts.width}:h=${streamOpts.height}:force_original_aspect_ratio=increase:force_divisible_by=2`)
+                    .videoFilter(`scale=w=${streamOpts.width}:h=${streamOpts.height}:force_original_aspect_ratio=decrease:force_divisible_by=2`)
                     .fpsOutput(streamOpts.fps ?? 30)
                     .videoBitrate(`${streamOpts.bitrateKbps}k`)
                     .format('h264')
@@ -192,22 +198,26 @@ export class Discord {
 
                 videoOutput.pipe(videoStream, { end: false });
 
+                // Audio
                 let audioStream: AudioStream = new AudioStream(udpConnection);
-                let opus = new prism.opus.Encoder({ channels: 2, rate: 48000, frameSize: 960 });
+                let audioOutput = new prism.opus.Encoder({ channels: 2, rate: 48000, frameSize: 960 });
+                this._volumeTranformer = new prism.VolumeTransformer({ type: 's16le', volume: 1 });
+                this._volumeTranformer.pipe(audioOutput);
 
-                this._ffmpegCommand.output(StreamOutput(opus).url, { end: false })
+                this._ffmpegCommand.output(StreamOutput(this._volumeTranformer).url, { end: false })
                     .noVideo()
                     .audioChannels(2)
                     .audioFrequency(48000)
                     .format('s16le');
 
-                opus.pipe(audioStream, { end: false });
+                audioOutput.pipe(audioStream, { end: false });
 
+                // Additional flags
                 if (streamOpts.hardwareAcceleratedDecoding) this._ffmpegCommand.inputOption('-hwaccel', 'auto');
                 if (streamOpts.readAtNativeFps) this._ffmpegCommand.inputOption('-re');
 
                 if (typeof input === "string" && validUrl.isWebUri(input as string)) {
-                    let headers = { // TODO: auth headers for jellyfin HLS
+                    let headers = {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.3",
                         "Connection": "keep-alive"
                     }
@@ -227,6 +237,7 @@ export class Discord {
                     }
                 }
 
+                // Start streaming video
                 this._ffmpegCommand.run();
             } catch (e) {
                 this._ffmpegCommand = null;

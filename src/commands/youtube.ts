@@ -39,7 +39,7 @@ export async function youtubeCommand(discord: Discord, msg: Message, args: strin
 
     await msg.react('✅');
 
-    discord.playVideo(url, msg.guild!.id, msg.author.voice!.channelId!)
+    discord.streamVideo(url, msg.guild!.id, msg.author.voice!.channelId!)
         .catch(e => {
             console.warn(`Something went wrong while streaming ${videoInfo.videoDetails.videoId} from YouTube in ${msg.guild!.id}\n${e}`);
             msg.react('⚠️').catch(() => { });

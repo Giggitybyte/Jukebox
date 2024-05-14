@@ -10,14 +10,15 @@ import validUrl from 'valid-url';
 
 export async function jellyfinCommand(discord: Discord, msg: Message, args: string[]) {
     if (validUrl.isWebUri(args[0])) {
-        await msg.react('🔗').catch(() => { });
         jellyfinUrl(discord, msg, args[0]);
     } else {
         jellyfinSearch(discord, msg, args.join(' '));
     }
 }
 
-async function jellyfinUrl(discord: Discord, msg: Message, url: string): Promise<BaseItemDto | undefined> {
+async function jellyfinUrl(discord: Discord, msg: Message, url: string) {
+    await msg.react('🔗').catch(() => { });
+
     let paramIndex = url.indexOf("#!/details") + 10;
     let parameters = new URLSearchParams(url.substring(paramIndex))
     let itemId = parameters.get("id");
@@ -40,7 +41,7 @@ async function jellyfinUrl(discord: Discord, msg: Message, url: string): Promise
     let videoTitle = (video.Name!.length > 100) ? `${video.Name!.substring(0, 100)}...` : video.Name;
     discord.setStatus('📺', `Streaming: ${videoTitle}`);
 
-    discord.playVideo(videoUrl, msg.guild!.id, msg.author.voice!.channelId!);
+    discord.streamVideo(videoUrl, msg.guild!.id, msg.author.voice!.channelId!);
 }
 
 async function jellyfinSearch(discord: Discord, msg: Message, query: string) {

@@ -35,7 +35,7 @@ export async function seasonOverview(discord: Discord, msg: Message, season: Bas
         overview += `[${i + 1}]:: ${(episode.Name!.length > 60) ? `${episode.Name!.substring(0, 60)}...` : episode.Name}\n`;
         overview += " ╰─── " + (duration.hours > 0 ? `${duration.hours} hours ` : '') + `${duration.minutes} minutes\n\n`;
     }
-    overview += "```\n*Reply to this message with a number to view season episodes*"
+    overview += "```\n*Reply to this message with a number to select an episode*"
 
     let overviewMsg = await msg.channel.send(overview);
     discord.gatewayClient.on('messageCreate', async (m) => {

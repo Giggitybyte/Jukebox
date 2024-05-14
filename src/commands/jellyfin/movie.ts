@@ -40,10 +40,10 @@ export async function movieOverview(discord: Discord, msg: Message, movie: BaseI
         }
 
         let videoTitle = (video.Name!.length > 100) ? `${video.Name!.substring(0, 100)}...` : video.Name;
-        discord.setStatus('📺', `Streaming: ${videoTitle}`);
+        discord.setStatus('📺', `Streaming ${videoTitle}`);
 
         let videoUrl = await jellyfinSdk.getVideoStreamUrl(video.ServerId!, video.Id!);
-        discord.playVideo(videoUrl, msg.guild!.id, user.voice!.channelId!);
+        discord.streamVideo(videoUrl, msg.guild!.id, user.voice!.channelId!);
 
         await (msg.channel as ThreadChannel).setArchived(true);
     });
