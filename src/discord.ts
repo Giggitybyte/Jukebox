@@ -14,6 +14,7 @@ import prism from "prism-media";
 import { Readable } from "stream";
 import validUrl from 'valid-url';
 import { setTimeout } from "timers/promises";
+import { torrentCommand } from "./commands/torrent.js";
 
 /** Wrapper class for interacting with Discord and livestreaming video to a voice channel. */
 export class Discord {
@@ -56,16 +57,20 @@ export class Discord {
 
             if (cmd === "help") {
                 helpCommand(this, msg, args);
+            } else if (msg.author.voice?.channelId == null) {
+                return;
             } else if (cmd === "volume") {
                 volumeCommand(this, msg, args);
             } else if (cmd === "disconnect" || cmd === "stop") {
                 disconnectCommand(this, msg, args);
-            } else if (args.length == 0 || msg.author.voice?.channelId == null) {
+            } else if (args.length == 0) {
                 return;
             } else if (cmd === "youtube") {
                 youtubeCommand(this, msg, args);
             } else if (cmd === "jellyfin") {
                 jellyfinCommand(this, msg, args);
+            } else if (cmd === "torrent") {
+                torrentCommand(this, msg, args);
             }
         });
     }

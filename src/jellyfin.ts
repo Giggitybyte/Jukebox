@@ -52,7 +52,15 @@ export class JellyfinSdk {
         let itemsApi = getItemsApi(server.api);
         let result = await itemsApi.getItems({ 
             ids: [itemId], 
-            fields: [ItemFields.Overview, ItemFields.ChildCount, ItemFields.RecursiveItemCount, ItemFields.Width, ItemFields.Height, ItemFields.OriginalTitle],
+            fields: [
+                ItemFields.Overview, 
+                ItemFields.ChildCount, 
+                ItemFields.RecursiveItemCount, 
+                ItemFields.Width, 
+                ItemFields.Height, 
+                ItemFields.OriginalTitle,
+                ItemFields.Chapters
+            ],
         });
 
         if (result.data.TotalRecordCount == 0) {

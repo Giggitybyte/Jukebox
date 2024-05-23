@@ -5,7 +5,7 @@ import ytdl from 'ytdl-core';
 
 export async function youtubeCommand(discord: Discord, msg: Message, args: string[]) {
     if (args.length != 1) return;
-    await msg.react('🔗').catch(() => { })
+    await msg.react('🔗').catch(() => { });
 
     if (ytdl.validateURL(args[0]) == false) {
         await msg.react('❌').catch(() => { });
