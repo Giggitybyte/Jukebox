@@ -2,10 +2,10 @@ import os from 'os'
 import jsonfile from 'jsonfile';
 import urlcat from 'urlcat';
 import { Api, ClientInfo, DeviceInfo, Jellyfin } from "@jellyfin/sdk";
-import { getItemsApi, getSystemApi } from "@jellyfin/sdk/lib/utils/api";
-import { BaseItemDto, ItemFields } from '@jellyfin/sdk/lib/generated-client/models';
+import { getItemsApi, getSystemApi, getImageApi } from "@jellyfin/sdk/lib/utils/api";
+import { BaseItemDto, BaseItemKind, ImageType, ItemFields } from '@jellyfin/sdk/lib/generated-client/models';
 
-export class JellyfinSdk {
+export class JellyfinApi {
     private _jellyfin: Jellyfin;
     private _servers: Map<string, JellyfinServer>;
 
@@ -35,7 +35,7 @@ export class JellyfinSdk {
 
         this._servers = new Map<string, JellyfinServer>();
 
-        let jsonServers: JsonServer[] = jsonfile.readFileSync('./jellyfin-servers.json')
+        let jsonServers: JsonServer[] = jsonfile.readFileSync('./config/jellyfin.json')
         jsonServers.forEach(async server => await this.addServer(server.address, server.token));
     }
 
@@ -50,14 +50,14 @@ export class JellyfinSdk {
     public async getItem(serverId: string, itemId: string): Promise<BaseItemDto | undefined> {
         let server = this.servers.get(serverId)!;
         let itemsApi = getItemsApi(server.api);
-        let result = await itemsApi.getItems({ 
-            ids: [itemId], 
+        let result = await itemsApi.getItems({
+            ids: [itemId],
             fields: [
-                ItemFields.Overview, 
-                ItemFields.ChildCount, 
-                ItemFields.RecursiveItemCount, 
-                ItemFields.Width, 
-                ItemFields.Height, 
+                ItemFields.Overview,
+                ItemFields.ChildCount,
+                ItemFields.RecursiveItemCount,
+                ItemFields.Width,
+                ItemFields.Height,
                 ItemFields.OriginalTitle,
                 ItemFields.Chapters
             ],
@@ -68,6 +68,37 @@ export class JellyfinSdk {
         }
 
         return result.data.Items![0];
+    }
+
+    public async getItems(serverId: string, types: BaseItemKind[]): Promise<BaseItemDto[]> {
+        let server = this.servers.get(serverId)!;
+        let itemsApi = getItemsApi(server.api);
+
+        let result = await itemsApi.getItems({
+            recursive: true,
+            includeItemTypes: types,
+            fields: [
+                ItemFields.Overview,
+                ItemFields.ChildCount,
+                ItemFields.RecursiveItemCount,
+                ItemFields.Width,
+                ItemFields.Height,
+                ItemFields.OriginalTitle,
+                ItemFields.ProviderIds,
+                ItemFields.MediaStreams
+            ],
+        });
+
+        if (result.data.TotalRecordCount == 0) {
+            return [];
+        }
+
+        return result.data.Items!;
+    }
+
+    public getItemImageUrl(serverId: string, itemId: string, imageType: ImageType = 'Primary'): string {
+        let server = this.servers.get(serverId)!;
+        return `${server.address}/Items/${itemId}/Images/${imageType}`;
     }
 
     public async getVideoStreamUrl(serverId: string, itemId: string) {
@@ -122,7 +153,7 @@ export class JellyfinSdk {
             jsonServers[index++] = { address: address, token: token };
         }
 
-        await jsonfile.writeFile('./jellyfin-servers.json', jsonServers, { spaces: 2 })
+        await jsonfile.writeFile('./config/jellyfin.json', jsonServers, { spaces: 2 })
     }
 
     private videoParameters(videoId: string) {
@@ -149,4 +180,4 @@ interface JsonServer {
     token: string;
 }
 
-export const jellyfinSdk = new JellyfinSdk();
+export const jellyfinApi = new JellyfinApi();

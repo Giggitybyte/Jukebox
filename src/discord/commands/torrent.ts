@@ -1,5 +1,5 @@
 import { Discord } from "../discord";
-import { isValidMagnetLink } from "../util";
+import { isValidMagnetLink } from "../../util";
 import { Message } from "discord.js-selfbot-v13";
 import { Readable } from "stream";
 import torrentStream from 'torrent-stream';
@@ -54,9 +54,4 @@ export async function torrentCommand(discord: Discord, msg: Message, args: strin
         .finally(() => {
             torrentEngine.destroy(() => { });
         });
-
-    // filter all common video files.
-    // if only one video, play that
-    // else display results decending by size.
-    //
 }

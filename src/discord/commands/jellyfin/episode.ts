@@ -1,13 +1,13 @@
 import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { Message, ThreadChannel } from "discord.js-selfbot-v13";
 import { Discord } from "../../discord";
-import { jellyfinSdk } from "../../jellyfin";
+import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
 
 export async function episodeOverview(discord: Discord, msg: Message, episode: BaseItemDto) {
     await msg.channel.sendTyping();
 
-    let server = jellyfinSdk.servers.get(episode.ServerId!)!;
-    let duration = jellyfinSdk.convertTicks(episode.RunTimeTicks!);
+    let server = jellyfinApi.servers.get(episode.ServerId!)!;
+    let duration = jellyfinApi.convertTicks(episode.RunTimeTicks!);
 
     let overview = `${episode.SeriesName}\n${episode.SeasonName}\n**${episode.Name}**\n`;
 
@@ -31,7 +31,7 @@ export async function episodeOverview(discord: Discord, msg: Message, episode: B
     discord.gatewayClient.on('messageReactionAdd', async (reaction, user) => {
         if (reaction.message.id !== overviewMsg.id || user.voice?.channel == null) return;
 
-        let video = await jellyfinSdk.getItem(episode.ServerId!, episode.Id!);
+        let video = await jellyfinApi.getItem(episode.ServerId!, episode.Id!);
         if (video == undefined || video.Type != BaseItemKind.Episode) {
             console.warn(`Jellyfin episode overview ${overviewMsg.id} contained deleted/unavailable episode ${episode.IndexNumber}`);
             return;
@@ -40,7 +40,7 @@ export async function episodeOverview(discord: Discord, msg: Message, episode: B
         let seriesTitle = (video.SeriesName!.length > 60) ? `${video.SeriesName!.substring(0, 60)}...` : video.SeriesName;
         discord.setStatus('📺', `Streaming ${seriesTitle} S${video.ParentIndexNumber}E${video.IndexNumber}`);
 
-        let videoUrl = await jellyfinSdk.getVideoStreamUrl(video.ServerId!, video.Id!);
+        let videoUrl = await jellyfinApi.getVideoStreamUrl(video.ServerId!, video.Id!);
         discord.streamVideo(videoUrl, msg.guild!.id, user.voice!.channelId!);
 
         await (msg.channel as ThreadChannel).setArchived(true);

@@ -1,7 +1,7 @@
-import { movieOverview } from "./movie";
-import { seriesOverview } from "./series";
-import { Discord } from "../../discord";
-import { jellyfinSdk, JellyfinServer } from "../../jellyfin";
+import { movieOverview } from "./jellyfin/movie";
+import { seriesOverview } from "./jellyfin/series";
+import { Discord } from "../discord";
+import { jellyfinApi, JellyfinServer } from "../../jellyfin/jellyfinApi";
 import { Message } from "discord.js-selfbot-v13";
 import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { getSearchApi, getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
@@ -19,17 +19,17 @@ export async function jellyfinCommand(discord: Discord, msg: Message, args: stri
 async function jellyfinUrl(discord: Discord, msg: Message, url: string) {
     await msg.react('🔗').catch(() => { });
 
-    let paramIndex = url.indexOf("#!/details") + 10;
+    let paramIndex = url.indexOf("#/details") + 9;
     let parameters = new URLSearchParams(url.substring(paramIndex))
     let itemId = parameters.get("id");
     let serverId = parameters.get("serverId");
 
-    if (serverId == null || itemId == null || jellyfinSdk.servers.has(serverId) == false) {
+    if (serverId == null || itemId == null || jellyfinApi.servers.has(serverId) == false) {
         await msg.react('❌').catch(() => { });
         return;
     }
 
-    let video = await jellyfinSdk.getItem(serverId, itemId);
+    let video = await jellyfinApi.getItem(serverId, itemId);
     if (video == undefined || (video.Type != BaseItemKind.Movie && video.Type != BaseItemKind.Episode)) {
         await msg.react('❌').catch(() => { });
         return;
@@ -37,7 +37,7 @@ async function jellyfinUrl(discord: Discord, msg: Message, url: string) {
         await msg.react('✅').catch(() => { });
     }
 
-    let videoUrl = await jellyfinSdk.getVideoStreamUrl(video.ServerId!, video.Id!);
+    let videoUrl = await jellyfinApi.getVideoStreamUrl(video.ServerId!, video.Id!);
     let videoTitle = (video.Name!.length > 100) ? `${video.Name!.substring(0, 100)}...` : video.Name;
     discord.setStatus('📺', `Streaming: ${videoTitle}`);
 
@@ -50,7 +50,7 @@ async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
     await searchThread.sendTyping();
 
     let results: { server: JellyfinServer, result: BaseItemDto, seasons: number | null }[] = [];
-    for (const [id, server] of jellyfinSdk.servers) {
+    for (const [id, server] of jellyfinApi.servers) {
         let result = await getSearchApi(server.api).get({
             searchTerm: query,
             limit: 10,
@@ -58,7 +58,7 @@ async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
         });
 
         for (let searchResult of result.data.SearchHints!) {
-            let item = await jellyfinSdk.getItem(id, searchResult.Id!);
+            let item = await jellyfinApi.getItem(id, searchResult.Id!);
             if (searchResult.Type == BaseItemKind.Series) {
                 let seasonsResponse = await getTvShowsApi(server.api).getSeasons({ seriesId: searchResult.Id! });
                 let seasonCount = seasonsResponse.data.TotalRecordCount!;
@@ -74,7 +74,7 @@ async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
     results.sort((a, b) => a.result.Name!.localeCompare(b.result.Name!));
 
 
-    let resultList = `Results for **\`${query}\`** *(${jellyfinSdk.servers.size} ${jellyfinSdk.servers.size == 1 ? "server" : "servers"}*)\n`;
+    let resultList = `Results for **\`${query}\`** *(${jellyfinApi.servers.size} ${jellyfinApi.servers.size == 1 ? "server" : "servers"}*)\n`;
     resultList += "```asciidoc\n";
 
     for (let i = 0; i < results.length; i++) {
@@ -109,7 +109,7 @@ async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
 
         let selectedNumber = Number(m.content);
         let { server, result } = results[selectedNumber - 1];
-        let selectedItem = await jellyfinSdk.getItem(server.id, result.Id!);
+        let selectedItem = await jellyfinApi.getItem(server.id, result.Id!);
 
         if (selectedItem == undefined) {
             console.warn(`Jellyfin result message ${resultListMsg.id} contained deleted/unavailable ${result.Type?.toLowerCase()} ${result.Name} (${result.Id})`);

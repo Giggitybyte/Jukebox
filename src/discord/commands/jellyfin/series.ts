@@ -1,6 +1,6 @@
 import { seasonOverview } from "./season";
 import { Discord } from "../../discord";
-import { jellyfinSdk } from "../../jellyfin";
+import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import { Message } from "discord.js-selfbot-v13";
@@ -9,7 +9,7 @@ import { Message } from "discord.js-selfbot-v13";
 export async function seriesOverview(discord: Discord, msg: Message, series: BaseItemDto): Promise<BaseItemDto | undefined> {
     await msg.channel.sendTyping();
 
-    let server = jellyfinSdk.servers.get(series.ServerId!)!;
+    let server = jellyfinApi.servers.get(series.ServerId!)!;
     let seriesApi = getTvShowsApi(server.api);
     let seasonsResponse = await seriesApi.getSeasons({ seriesId: series.Id! });
     let seasons: { season: BaseItemDto, episodes: BaseItemDto[] }[] = [];
@@ -60,7 +60,7 @@ export async function seriesOverview(discord: Discord, msg: Message, series: Bas
 
         let selectedNumber = Number(m.content);
         let { season } = seasons[selectedNumber - 1];
-        let selectedSeason = await jellyfinSdk.getItem(season.ServerId!, season.Id!);
+        let selectedSeason = await jellyfinApi.getItem(season.ServerId!, season.Id!);
 
         if (selectedSeason == undefined) {
             console.warn(`Jellyfin series overview ${overviewMsg.id} contained deleted/unavailable season ${season.IndexNumber} ${series.Name!}`);

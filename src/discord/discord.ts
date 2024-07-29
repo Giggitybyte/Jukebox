@@ -1,7 +1,8 @@
 // commands
 import { helpCommand } from "./commands/help.js";
-import { jellyfinCommand } from "./commands/jellyfin/jellyfin.js";
+import { jellyfinCommand } from "./commands/jellyfin.js";
 import { youtubeCommand } from "./commands/youtube.js";
+import { torrentCommand } from "./commands/torrent.js";
 import { volumeCommand } from "./commands/volume.js";
 import { disconnectCommand } from "./commands/disconnect.js";
 
@@ -14,7 +15,7 @@ import prism from "prism-media";
 import { Readable } from "stream";
 import validUrl from 'valid-url';
 import { setTimeout } from "timers/promises";
-import { torrentCommand } from "./commands/torrent.js";
+
 
 /** Wrapper class for interacting with Discord and livestreaming video to a voice channel. */
 export class Discord {
@@ -97,6 +98,7 @@ export class Discord {
         });
 
         // TODO: add idle video streamed from a local file
+        // HOME - Resonance on loop with "Waiting for media selection" text
     }
 
     public async streamVideo(video: string | Readable, guildId: string, channelId: string) {
@@ -158,7 +160,8 @@ export class Discord {
     }
 
     private async createWebcamConnection(guildId: string, channelId: string) {
-
+        // TODO: audio-only support
+        // display audio visualizer through webcam 
     }
 
     private streamToDiscord(input: string | Readable, udpConnection: MediaUdp) {
@@ -172,7 +175,7 @@ export class Discord {
                     .addOption('-analyzeduration', '0')
                     .on('end', () => {
                         this._ffmpegCommand = null;
-                        resolve("Stream completed.")
+                        resolve("Stream end.")
                     })
                     .on("error", (err, stdout, stderr) => {
                         this._ffmpegCommand = null;
@@ -244,6 +247,7 @@ export class Discord {
 
                 // Start streaming video
                 this._ffmpegCommand.run();
+
             } catch (e) {
                 this._ffmpegCommand = null;
                 reject("FFmpeg exited prematurely: " + e.message);
@@ -252,3 +256,4 @@ export class Discord {
     }
 }
 
+export const discord = new Discord();

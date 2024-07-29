@@ -1,20 +1,20 @@
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Message } from "discord.js-selfbot-v13";
 import { Discord } from "../../discord";
-import { jellyfinSdk } from "../../jellyfin";
+import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
 import { getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import { episodeOverview } from "./episode";
 
 export async function seasonOverview(discord: Discord, msg: Message, season: BaseItemDto) {
     await msg.channel.sendTyping();
 
-    let server = jellyfinSdk.servers.get(season.ServerId!)!;
+    let server = jellyfinApi.servers.get(season.ServerId!)!;
     let seriesApi = getTvShowsApi(server.api);
     let { data: { Items } } = await seriesApi.getEpisodes({ seriesId: season.SeriesId!, seasonId: season.Id! });
     let episodes: BaseItemDto[] = [];
 
     for (let episode of Items!) {
-        let item = await jellyfinSdk.getItem(server.id, episode.Id!) as BaseItemDto;
+        let item = await jellyfinApi.getItem(server.id, episode.Id!) as BaseItemDto;
        episodes.push(item);
     }
 
@@ -30,7 +30,7 @@ export async function seasonOverview(discord: Discord, msg: Message, season: Bas
     overview += "**Available Episodes**\n```asciidoc\n";
     for (let i = 0; i < episodes!.length; i++) {
         let episode = episodes![i];
-        let duration = jellyfinSdk.convertTicks(episode.RunTimeTicks!);
+        let duration = jellyfinApi.convertTicks(episode.RunTimeTicks!);
 
         overview += `[${i + 1}]:: ${(episode.Name!.length > 60) ? `${episode.Name!.substring(0, 60)}...` : episode.Name}\n`;
         overview += " ╰─── " + (duration.hours > 0 ? `${duration.hours} hours ` : '') + `${duration.minutes} minutes\n\n`;
@@ -47,7 +47,7 @@ export async function seasonOverview(discord: Discord, msg: Message, season: Bas
 
         let selectedNumber = Number(m.content);
         let episode = episodes![selectedNumber - 1];
-        let selectedEpisode = await jellyfinSdk.getItem(episode.ServerId!, episode.Id!);
+        let selectedEpisode = await jellyfinApi.getItem(episode.ServerId!, episode.Id!);
 
         if (selectedEpisode == undefined) {
             console.warn(`Jellyfin season overview ${overviewMsg.id} contained deleted/unavailable episode ${episode.IndexNumber}`);
