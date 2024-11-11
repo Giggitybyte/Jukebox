@@ -1,10 +1,11 @@
 import express from 'express';
-import { discord } from "./discord";
-import { jellyfinApi } from "../jellyfin/jellyfinApi";
+import { discordUser } from "./discordUser";
+import { jellyfinApi } from "../../jellyfin/jellyfinApi";
 import { GuildTextBasedChannel, Message, TextChannel } from "discord.js-selfbot-v13";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
-import { jellyfinChannelId } from "../../config/discord.json"
+import { jellyfinChannelId } from "../../../config/discord.json"
 import { randomInt } from 'crypto';
+import { convertTicks } from '../../util';
 
 // Discord channel wrapper which contains the combined media library of all Jellyfin servers.
 // Automatically updates when new content is available by listening for a POST request from each Jellyfin server.
@@ -14,8 +15,8 @@ class JellyfinChannel {
     private mediaMessages = new Map<string, MediaInfo>(); // message id -> movie/series
 
     constructor() {
-        discord.gatewayClient.on('messageReactionAdd', (reaction, user) => {
-            // if (!this.mediaMessages.has(reaction.message.id)) return;
+        discordUser.gatewayClient.on('messageReactionAdd', (reaction, user) => {
+            if (!this.mediaMessages.has(reaction.message.id)) return;
 
             // select best quality
             // choose at random if all servers have the same quality
@@ -24,7 +25,7 @@ class JellyfinChannel {
     }
 
     public async initialize() {
-        this.discordChannel = await discord.gatewayClient.channels.fetch(jellyfinChannelId) as TextChannel;
+        this.discordChannel = await discordUser.gatewayClient.channels.fetch(jellyfinChannelId) as TextChannel;
 
         let items = new Map<string, BaseItemDto[]>();
         let availableMedia: MediaInfo[] = [];
@@ -74,8 +75,8 @@ class JellyfinChannel {
         // Output all known media to channel
         for (let media of availableMedia) {
             let index = media.servers.length - 1 > 0 ? randomInt(0, media.servers.length - 1) : 0;
-            let randomServer = media.servers[index];
-            let item = items.get(randomServer.serverId)!.find(i => i.Id! === randomServer.itemId)!;
+            let mediaSource = media.servers[index];
+            let item = items.get(mediaSource.serverId)!.find(i => i.Id! === mediaSource.itemId)!;
 
             let overviewMsg: Message = await this.discordChannel.send({
                 content: `# ${item.Name!}\n` + "```\n" + (item.Overview ?? "No description.") + "\n```",
@@ -86,17 +87,19 @@ class JellyfinChannel {
             });
 
             this.mediaMessages.set(overviewMsg.id, media)
+            await new Promise(resolve => setTimeout(resolve, 2500));
 
             // Display available servers
             let thread = await overviewMsg.startThread({ name: `${item.Name!} (${item.ProductionYear})` });
             let text = `Available from ${media.servers.length} ${media.servers.length === 1 ? 'server' : 'servers'}\n`;
+            await new Promise(resolve => setTimeout(resolve, 2500));
 
             for (let index = 0; index < media.servers.length; index++) {
                 let serverInfo = media.servers[index];
                 let server = jellyfinApi.servers.get(serverInfo.serverId)!;
                 let serverItem = items.get(serverInfo.serverId)!.find(i => i.Id! === serverInfo.itemId)!;
 
-                let duration = jellyfinApi.convertTicks(serverItem.RunTimeTicks!);
+                let duration = convertTicks(serverItem.RunTimeTicks!);
                 let audioTracks: number = serverItem.MediaStreams!.filter(s => s.Type == 'Audio').length;
                 let subtitleTracks: number = serverItem.MediaStreams!.filter(s => s.Type == 'Subtitle').length;
 
@@ -109,10 +112,11 @@ class JellyfinChannel {
                     "```\n";
             }
 
-            text += "*Reply to this message with a number to select a server*\n" +
-                "*Add any reaction to this message to auto select a server*"
+            text += "*Reply to this message with a number to select a server*";
 
             let serversMsg = await thread.send(text);
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 5000));
+
             // add event listener 
         }
     }

@@ -1,11 +1,12 @@
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { Message } from "discord.js-selfbot-v13";
-import { Discord } from "../../discord";
-import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
+import { DiscordUser } from "../../discordUser";
+import { jellyfinApi } from "../../../../jellyfin/jellyfinApi";
 import { getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import { episodeOverview } from "./episode";
+import { convertTicks } from "../../../../util";
 
-export async function seasonOverview(discord: Discord, msg: Message, season: BaseItemDto) {
+export async function seasonOverview(discord: DiscordUser, msg: Message, season: BaseItemDto) {
     await msg.channel.sendTyping();
 
     let server = jellyfinApi.servers.get(season.ServerId!)!;
@@ -30,7 +31,7 @@ export async function seasonOverview(discord: Discord, msg: Message, season: Bas
     overview += "**Available Episodes**\n```asciidoc\n";
     for (let i = 0; i < episodes!.length; i++) {
         let episode = episodes![i];
-        let duration = jellyfinApi.convertTicks(episode.RunTimeTicks!);
+        let duration = convertTicks(episode.RunTimeTicks!);
 
         overview += `[${i + 1}]:: ${(episode.Name!.length > 60) ? `${episode.Name!.substring(0, 60)}...` : episode.Name}\n`;
         overview += " ╰─── " + (duration.hours > 0 ? `${duration.hours} hours ` : '') + `${duration.minutes} minutes\n\n`;

@@ -39,15 +39,7 @@ export class JellyfinApi {
         jsonServers.forEach(async server => await this.addServer(server.address, server.token));
     }
 
-    public convertTicks(ticks: number) { // TODO: add seconds
-        return {
-            days: Math.floor(ticks / (24 * 60 * 60 * 10000000)),
-            hours: Math.floor((ticks / (60 * 60 * 10000000)) % 24),
-            minutes: Math.round((ticks / (60 * 10000000)) % 60)
-        };
-    }
-
-    public async getItem(serverId: string, itemId: string): Promise<BaseItemDto | undefined> {
+    public async getItem(serverId: string, itemId: string): Promise<BaseItemDto> {
         let server = this.servers.get(serverId)!;
         let itemsApi = getItemsApi(server.api);
         let result = await itemsApi.getItems({
@@ -59,13 +51,10 @@ export class JellyfinApi {
                 ItemFields.Width,
                 ItemFields.Height,
                 ItemFields.OriginalTitle,
-                ItemFields.Chapters
+                ItemFields.Chapters,
+                ItemFields.Genres
             ],
         });
-
-        if (result.data.TotalRecordCount == 0) {
-            return;
-        }
 
         return result.data.Items![0];
     }
@@ -78,6 +67,7 @@ export class JellyfinApi {
             recursive: true,
             includeItemTypes: types,
             fields: [
+                ItemFields.MediaStreams,
                 ItemFields.Overview,
                 ItemFields.ChildCount,
                 ItemFields.RecursiveItemCount,
@@ -85,7 +75,7 @@ export class JellyfinApi {
                 ItemFields.Height,
                 ItemFields.OriginalTitle,
                 ItemFields.ProviderIds,
-                ItemFields.MediaStreams
+                ItemFields.Genres
             ],
         });
 

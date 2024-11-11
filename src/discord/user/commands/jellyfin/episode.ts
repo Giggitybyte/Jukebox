@@ -1,13 +1,14 @@
 import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { Message, ThreadChannel } from "discord.js-selfbot-v13";
-import { Discord } from "../../discord";
-import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
+import { DiscordUser } from "../../discordUser";
+import { jellyfinApi } from "../../../../jellyfin/jellyfinApi";
+import { convertTicks } from "../../../../util";
 
-export async function episodeOverview(discord: Discord, msg: Message, episode: BaseItemDto) {
+export async function episodeOverview(discord: DiscordUser, msg: Message, episode: BaseItemDto) {
     await msg.channel.sendTyping();
 
     let server = jellyfinApi.servers.get(episode.ServerId!)!;
-    let duration = jellyfinApi.convertTicks(episode.RunTimeTicks!);
+    let duration = convertTicks(episode.RunTimeTicks!);
 
     let overview = `${episode.SeriesName}\n${episode.SeasonName}\n**${episode.Name}**\n`;
 

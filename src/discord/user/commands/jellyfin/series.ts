@@ -1,12 +1,12 @@
 import { seasonOverview } from "./season";
-import { Discord } from "../../discord";
-import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
+import { DiscordUser } from "../../discordUser";
+import { jellyfinApi } from "../../../../jellyfin/jellyfinApi";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import { Message } from "discord.js-selfbot-v13";
 
 
-export async function seriesOverview(discord: Discord, msg: Message, series: BaseItemDto): Promise<BaseItemDto | undefined> {
+export async function seriesOverview(discord: DiscordUser, msg: Message, series: BaseItemDto): Promise<BaseItemDto | undefined> {
     await msg.channel.sendTyping();
 
     let server = jellyfinApi.servers.get(series.ServerId!)!;

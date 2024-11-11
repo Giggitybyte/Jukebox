@@ -1,5 +1,7 @@
+
+import { discordUserToken, guildId } from "../../../config/discord.json";
+
 // commands
-import { helpCommand } from "./commands/help.js";
 import { jellyfinCommand } from "./commands/jellyfin.js";
 import { youtubeCommand } from "./commands/youtube.js";
 import { torrentCommand } from "./commands/torrent.js";
@@ -13,16 +15,18 @@ import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import ffmpeg, { FfmpegCommand } from "fluent-ffmpeg";
 import prism from "prism-media";
 import { Readable } from "stream";
-import validUrl from 'valid-url';
 import { setTimeout } from "timers/promises";
+import EventEmitter from "events";
+import validUrl from 'valid-url';
 
 
 /** Wrapper class for interacting with Discord and livestreaming video to a voice channel. */
-export class Discord {
+export class DiscordUser {    
     private _discordClient: Client;
     private _streamClient: Streamer;
     private _ffmpegCommand: FfmpegCommand | null
     private _volumeTranformer: prism.VolumeTransformer | null;
+    private eventEmitter: EventEmitter;
 
     public get gatewayClient() {
         return this._discordClient;
@@ -36,9 +40,13 @@ export class Discord {
         return (this._volumeTranformer?.volume ?? 1) * 100;
     }
 
+    public get streamEvents() {
+        return this.eventEmitter;
+    }
+
     public set streamVolume(percentage: number) {
         if (this._volumeTranformer == null) return;
-        this._volumeTranformer.setVolume(percentage > -1 ? percentage / 100 : 1);
+        this._volumeTranformer.setVolume(percentage > 1 ? percentage / 100 : 1);
     }
 
     constructor() {
@@ -56,9 +64,7 @@ export class Discord {
             let cmd = message.slice(0, 1)[0].substring(2);
             let args = message.slice(1);
 
-            if (cmd === "help") {
-                helpCommand(this, msg, args);
-            } else if (msg.author.voice?.channelId == null) {
+            if (msg.author.voice?.channelId == null) {
                 return;
             } else if (cmd === "volume") {
                 volumeCommand(this, msg, args);
@@ -76,6 +82,10 @@ export class Discord {
         });
     }
 
+    public login(): Promise<string> {
+        return this._discordClient.login(discordUserToken)
+    }
+
     public setStatus(emoji: string, message: string) {
         let status = new CustomStatus(this._discordClient)
             .setEmoji(emoji)
@@ -90,7 +100,7 @@ export class Discord {
     public setIdleStatus() {
         let status = new CustomStatus(this._discordClient)
             .setEmoji('💿')
-            .setState('Spinning around...'); // TODO: random idle status
+            .setState('Spinning around...'); // TODO: random idle status between total number of movies, series and songs
 
         this._discordClient.user!.setPresence({
             status: "idle",
@@ -107,17 +117,19 @@ export class Discord {
             await setTimeout(1500);
         }
 
-        let udpConnection = await this.createLiveStreamConnection(guildId, channelId);
+        let udpConnection = await this.createLiveStreamConnection(guildId, channelId); // TODO: reuse connection
         udpConnection.mediaConnection.setSpeaking(true);
         udpConnection.mediaConnection.setVideoStatus(true);
 
         console.log(`Started streaming in guild ${guildId}; voice channel ${channelId}`);
+        this.eventEmitter.emit('liveStreamStart');
+
         await this.streamToDiscord(video, udpConnection)
-            .then(msg => {
-                console.log(`Finished streaming in guild ${guildId} (${msg})`);
-            })
+            .then(msg => console.log(`Finished streaming in guild ${guildId} (${msg})`))
             .catch(e => console.error(`Something went wrong while streaming in guild ${guildId}: ${e.message}`))
             .finally(async () => {
+                this.eventEmitter.emit('liveStreamEnd');
+
                 await setTimeout(1500);
                 await this.closeStream();
                 this.setIdleStatus();
@@ -175,11 +187,11 @@ export class Discord {
                     .addOption('-analyzeduration', '0')
                     .on('end', () => {
                         this._ffmpegCommand = null;
-                        resolve("Stream end.")
+                        resolve("ffmpeg stream end");
                     })
                     .on("error", (err, stdout, stderr) => {
                         this._ffmpegCommand = null;
-                        reject('Unable to stream: ' + err)
+                        reject('ffmpeg stream errored: ' + err);                        
                     })
                     .on('stderr', console.error);
 
@@ -256,4 +268,4 @@ export class Discord {
     }
 }
 
-export const discord = new Discord();
+export const discordUser = new DiscordUser();

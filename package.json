@@ -14,18 +14,21 @@
     "@types/jsonfile": "^6.1.4",
     "@types/node": "^20.12.7",
     "@types/torrent-stream": "^0.0.9",
+    "@types/turndown": "^5.0.5",
     "@types/valid-url": "^1.0.7",
     "typescript": "^5.4.5"
   },
   "dependencies": {
     "@dank074/discord-video-stream": "^3.2.0",
+    "@distube/ytdl-core": "^4.15.0",
     "@jellyfin/sdk": "^0.8.2",
+    "discord.js": "^14.16.2",
     "discord.js-selfbot-v13": "^3.1.4",
     "express": "^4.19.2",
     "jsonfile": "^6.1.0",
     "torrent-stream": "^1.2.1",
+    "turndown": "^7.2.0",
     "urlcat": "^3.1.0",
-    "valid-url": "^1.0.9",
-    "ytdl-core": "^4.11.5"
+    "valid-url": "^1.0.9"
   }
 }

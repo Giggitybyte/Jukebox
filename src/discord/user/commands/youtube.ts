@@ -1,9 +1,9 @@
-import { Discord } from "../discord.js";
+import { DiscordUser } from "../discordUser.js";
 import { command, MediaUdp } from "@dank074/discord-video-stream";
 import { Message, RichPresence } from "discord.js-selfbot-v13";
-import ytdl from 'ytdl-core';
+import ytdl from '@distube/ytdl-core';
 
-export async function youtubeCommand(discord: Discord, msg: Message, args: string[]) {
+export async function youtubeCommand(discord: DiscordUser, msg: Message, args: string[]) {
     if (args.length != 1) return;
     await msg.react('🔗').catch(() => { });
 

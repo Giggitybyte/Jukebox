@@ -1,7 +1,7 @@
 import { Message } from "discord.js-selfbot-v13";
-import { Discord } from "../discord";
+import { DiscordUser } from "../discordUser";
 
-export async function volumeCommand(discord: Discord, msg: Message, args: string[]) {
+export async function volumeCommand(discord: DiscordUser, msg: Message, args: string[]) {
     let volume = parseInt(args[0])
     if (Number.isNaN(volume) === true || discord.streamClient.voiceConnection?.streamConnection === undefined) return;
     

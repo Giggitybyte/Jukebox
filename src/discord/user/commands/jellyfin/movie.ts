@@ -1,13 +1,14 @@
 import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { Message, ThreadChannel } from "discord.js-selfbot-v13";
-import { jellyfinApi } from "../../../jellyfin/jellyfinApi";
-import { Discord } from "../../discord";
+import { jellyfinApi } from "../../../../jellyfin/jellyfinApi";
+import { DiscordUser } from "../../discordUser";
+import { convertTicks } from "../../../../util";
 
-export async function movieOverview(discord: Discord, msg: Message, movie: BaseItemDto) {
+export async function movieOverview(discord: DiscordUser, msg: Message, movie: BaseItemDto) {
     await msg.channel.sendTyping();
 
     let server = jellyfinApi.servers.get(movie.ServerId!)!;
-    let duration = jellyfinApi.convertTicks(movie.RunTimeTicks!);
+    let duration = convertTicks(movie.RunTimeTicks!);
 
     let overview = `**${movie.Name}**\n`;
     if (movie.OriginalTitle != null && movie.OriginalTitle !== movie.Name) {

@@ -1,14 +1,14 @@
 import { movieOverview } from "./jellyfin/movie";
 import { seriesOverview } from "./jellyfin/series";
-import { Discord } from "../discord";
-import { jellyfinApi, JellyfinServer } from "../../jellyfin/jellyfinApi";
+import { DiscordUser } from "../discordUser";
+import { jellyfinApi, JellyfinServer } from "../../../jellyfin/jellyfinApi";
 import { Message } from "discord.js-selfbot-v13";
 import { BaseItemDto, BaseItemKind } from "@jellyfin/sdk/lib/generated-client/models";
 import { getSearchApi, getTvShowsApi } from "@jellyfin/sdk/lib/utils/api";
 import validUrl from 'valid-url';
 
 
-export async function jellyfinCommand(discord: Discord, msg: Message, args: string[]) {
+export async function jellyfinCommand(discord: DiscordUser, msg: Message, args: string[]) {
     if (validUrl.isWebUri(args[0])) {
         jellyfinUrl(discord, msg, args[0]);
     } else {
@@ -16,7 +16,7 @@ export async function jellyfinCommand(discord: Discord, msg: Message, args: stri
     }
 }
 
-async function jellyfinUrl(discord: Discord, msg: Message, url: string) {
+async function jellyfinUrl(discord: DiscordUser, msg: Message, url: string) {
     await msg.react('🔗').catch(() => { });
 
     let paramIndex = url.indexOf("#/details") + 9;
@@ -44,7 +44,7 @@ async function jellyfinUrl(discord: Discord, msg: Message, url: string) {
     discord.streamVideo(videoUrl, msg.guild!.id, msg.author.voice!.channelId!);
 }
 
-async function jellyfinSearch(discord: Discord, msg: Message, query: string) {
+async function jellyfinSearch(discord: DiscordUser, msg: Message, query: string) {
     await msg.react('🔎').catch(() => { });
     let searchThread = await msg.startThread({ name: `Jellyfin Search: '${query}'` });
     await searchThread.sendTyping();

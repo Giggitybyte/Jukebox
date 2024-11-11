@@ -1,5 +1,5 @@
-import { Discord } from "../discord";
-import { isValidMagnetLink } from "../../util";
+import { DiscordUser } from "../discordUser";
+import { isValidMagnetLink } from "../../../util";
 import { Message } from "discord.js-selfbot-v13";
 import { Readable } from "stream";
 import torrentStream from 'torrent-stream';
@@ -7,7 +7,7 @@ import torrentStream from 'torrent-stream';
 const videoExtensions = ['.webm', '.mkv', '.flv', '.avi', '.vob', '.mp4', '.mpg', '.mpeg', '.3gp', '.3g2'];
 const audioExtensions = [];
 
-export async function torrentCommand(discord: Discord, msg: Message, args: string[]) {
+export async function torrentCommand(discord: DiscordUser, msg: Message, args: string[]) {
     await msg.react('🧲').then(r => msg.react('🔗')).catch(() => { });
 
     if (isValidMagnetLink(args[0])) {
